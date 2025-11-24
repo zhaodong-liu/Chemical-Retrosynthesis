@@ -5,7 +5,9 @@
       "Bash(git -C /Users/zhaodongliu/Desktop/Chemical-Retrosynthesis ls-files)",
       "Bash(git rm:*)",
       "Bash(git mv:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(cat:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": []
