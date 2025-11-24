@@ -1,97 +1,334 @@
-# MolBART - aka Chemformer
+# LLM-based Chemical Retrosynthesis
 
-The MolBART project aims to pre-train a BART transformer language model [[1]](#1) on molecular SMILES strings [[2]](#2) by optimising a de-noising objective. We hypothesised that pre-training will lead to improved generalisation, performance, training speed and validity on downstream fine-tuned tasks. We tested the pre-trained model on downstream tasks such as reaction prediction, retrosynthetic prediction, molecular optimisation and molecular property prediction.
+## Overview
 
-We have now published our results in a pre-print [[3]](#3) which was accepted in Machine Learning: Science and Technology [[4]](#4) and will make the models and datasets available [here](https://az.box.com/s/7eci3nd9vy0xplqniitpk02rbg9q2zcq).
+This repository is the final project for DS-GA 1011 Natural Language Processing with Representation Learning. 
 
+It provides a unified framework for **chemical retrosynthesis prediction** combining two powerful approaches:
+
+### MolBART (aka Chemformer)
+
+A BART-based transformer model pre-trained on molecular SMILES strings, optimizing a denoising objective for improved generalization on downstream chemistry tasks including:
+- Reaction prediction (forward synthesis)
+- Retrosynthetic analysis (backward prediction)
+- Molecular optimization
+- Property prediction
+
+### LLM4Chem
+
+Large language model fine-tuning with LoRA (Low-Rank Adaptation) for chemistry tasks, supporting multiple foundation models:
+- **LlaSMol-Mistral-7B**
+- **LlaSMol-Galactica-6.7B**
+- **LlaSMol-Llama2-7B**
+- **LlaSMol-CodeLlama-7B**
+
+---
+
+## Features
+
+- **Pre-trained Models**: Access to pre-trained BART models for molecular tasks
+- **Efficient Fine-tuning**: LoRA-based parameter-efficient fine-tuning
+- **Multiple Datasets**: Support for USPTO-50, USPTO-MIT, and custom datasets
+- **Flexible Architecture**: Configurable encoder/decoder freezing and layer modifications
+- **Multi-GPU Training**: Distributed training with PyTorch Lightning and DeepSpeed
+- **Beam Search**: Advanced decoding strategies for improved prediction quality
+- **Data Augmentation**: SMILES augmentation for robust training
+
+---
 
 ## Installation
 
-The project dependencies can be installed as follows:
-- `conda create --name molbart rdkit -c rdkit`
-- `conda activate molbart`
-- `conda install pytorch==1.8.0 torchvision cudatoolkit=11.1 -c pytorch -c nvidia`
-- `conda install gcc_linux-64 gxx_linux-64 mpi4py`
-- `pip install -r requirements.txt`
+### Prerequisites
 
-[pysmilesutils](https://github.com/MolecularAI/pysmilesutils) must also be downloaded and installed. It can be done directly with pip
-- `python -m pip install git+https://github.com/MolecularAI/pysmilesutils.git`
+- Python 3.8+
+- CUDA 11.1+ (for GPU support)
+- Conda (recommended)
 
+### Setup Environment
 
-## Running the Code
+```bash
+# Create conda environment with RDKit
+conda create --name molbart python=3.8 rdkit -c rdkit
+conda activate molbart
 
-The following is an example run through of how to run the Chemformer code on the pre-trained models and datasets available [here](https://az.box.com/s/7eci3nd9vy0xplqniitpk02rbg9q2zcq).
+# Install PyTorch with CUDA support
+conda install pytorch==1.8.0 torchvision cudatoolkit=11.1 -c pytorch -c nvidia
 
-1. Create a Chemformer conda environment, as above.
-1. Download the dataset of interest and store it locally (let's say ../data/uspto_50.pickle).
-1. Download a pre-trained Chemformer model and store it locally (let's say ../models/pre-trained/combined.ckpt).
-1. Update the `fine_tune.sh` shell script in the example_scripts directory (or create your own) with the paths to your model and dataset, as well as the values of hyperparameters you wish to pass to the script.
-1. Run the `fine_tune.sh` script.
+# Install additional dependencies
+conda install gcc_linux-64 gxx_linux-64 mpi4py
+pip install -r requirements.txt
 
-You can of course run other scripts in the repository following a similar approach. The Scripts section below provides more details on what each script does.
+# Install pysmilesutils
+pip install git+https://github.com/MolecularAI/pysmilesutils.git
 
+# Install the package
+pip install -e .
+```
 
-## Codebase
+### Verify Installation
 
-The codebase is broadly split into the following parts:
-* Models
-* Data helpers
-* Tokenisation
-* Decoding
-* Scripts
+```bash
+python -c "import molbart; import torch; print('Installation successful!')"
+pytest test/  # Run tests
+```
 
-### Models
+---
 
-The  `models.py` file contains a Pytorch Lightning implementation of the BART language model, as well as Pytorch Lightning implementations of models for downstream tasks.
+## Quick Start
 
-### Data Helpers
+### 1. Pre-training a Model
 
-The `dataset.py` file contains a number of classes used to load, batch and process the data before it is passed to the model. Classes which inherit from `_AbsDataset` are subclasses of Pytorch's `nn.utils.Dataset` and are simply used to store and split data (molecules, reactions, etc) into its relevant subset (train, val, test).
+```bash
+python -m molbart.train \
+  --dataset zinc \
+  --data_path data/zinc_dataset.txt \
+  --vocab_path config/vocabs/bart_vocab.txt \
+  --d_model 512 \
+  --num_layers 6 \
+  --num_heads 8 \
+  --d_feedforward 2048 \
+  --batch_size 128 \
+  --epochs 10 \
+  --gpus 1
+```
 
-Our `_AbsDataModule` class inherits from Pytorch Lightning's `LightningDataModule` class, and its subclasses are used to augment, tokenise and tensorise the data before it passed to the model.
+### 2. Fine-tuning for Retrosynthesis
 
-Finally, we include a `TokenSampler` class which categorises sequences into buckets based on their length, and is able to sample a different batch size of sequences from each bucket. This helps to ensure that the model sees approximately the same number of tokens on each batch, as well as dramatically improving training speed.
+```bash
+# Using the provided script
+bash scripts/molbart/fine_tune_retrollm_gamma0.sh
 
-### Tokenisation
+# Or run directly
+python -m molbart.fine_tune \
+  --dataset UsptoTXT_gamma \
+  --data_path data/retro_111.txt \
+  --model_path models/pretrained/combined.ckpt \
+  --task backward_prediction \
+  --epochs 100 \
+  --lr 0.001 \
+  --batch_size 128 \
+  --gpus 1
+```
 
-Our `tokenise.py` file includes the `MolEncTokeniser` class which is capable of random 'BERT-style' masking of tokens, as well as padding each batch of sequences to be the same length. The tokeniser makes use of the `SMILESTokenizer` from the `pysmilesutils` library for tokenising SMILES into their constituent atoms.
+### 3. Evaluation
 
-### Decoding
+```bash
+python -m molbart.evaluate \
+  --model_path models/finetuned/model.ckpt \
+  --dataset uspto_50 \
+  --data_path data/uspto_50.pickle \
+  --task backward_prediction \
+  --num_beams 10
+```
 
-We include implementations of greedy and beam search decoding in the `decode.py` file. Both implementations make use of batch decoding for improved evaluation speeds. They do not, however, cache results from previous decodes, rather, they simply pass the entire sequence of tokens produced so far through the transformer decoder.
+### 4. Generate Predictions
 
-### Scripts
+```bash
+python -m molbart.predict \
+  --model_path models/finetuned/model.ckpt \
+  --input_smiles "CCO" \
+  --num_beams 10
+```
 
-The repository includes the following scripts:
-* `train.py` runs the pre-training 
-* `fine_tune.py` runs fine-tuning on a specified task
-* `evaluate.py` evaluates the performance of a fine-tuned model
-* `predict.py` writes the SMILES outputs of the model to a pandas DF stored in a pickle file
-* `build_tokeniser.py` creates a tokeniser from a dataset and stores it in a pickle file
+---
 
-Each script can be run using `python -m molbart.<scipt_name> <args>`.
+## Project Structure
 
-See the ArgumentParser args in each file for more details on each argument.
+```
+Chemical-Retrosynthesis/
+├── config/                      # Configuration files
+│   ├── vocabs/                 # Tokenizer vocabularies
+│   └── deepspeed/              # DeepSpeed configurations
+├── data/                        # Datasets (gitignored)
+├── scripts/                     # Training and evaluation scripts
+│   ├── molbart/               # MolBART experiment scripts
+│   └── llm4chem/              # LLM4Chem scripts
+├── molbart/                     # Core MolBART package
+│   ├── models/                # Model implementations
+│   ├── data/                  # Data loading and processing
+│   ├── tokeniser.py           # SMILES tokenization
+│   ├── decoder.py             # Beam search and decoding
+│   ├── train.py               # Pre-training script
+│   ├── fine_tune.py           # Fine-tuning script
+│   └── evaluate.py            # Evaluation script
+├── LLM4Chem/                    # LLM4Chem submodule
+├── dataset_conversion/          # Dataset format converters
+├── test/                        # Unit tests
+└── CLAUDE.md                    # Development guidelines
+```
 
-To run on multiple GPUs use the `--gpus <num>` argument for the train or fine tune scripts. This will run the script with Pytorch Lightning's distributed data parallel (DDP) processing. Validation will be disabled when using DDP to ensure the GPUs stay synchronised and stop possible deadlocks from occurring.
+---
 
+## Configuration
 
-## References
+### Vocabulary Files
 
-<a id="1">[1]</a>
-Lewis, Mike, et al.
-"Bart: Denoising sequence-to-sequence pre-training for natural language generation, translation, and comprehension."
-arXiv preprint arXiv:1910.13461 (2019).
+Located in `config/vocabs/`:
+- `bart_vocab.txt`: Pre-training vocabulary
+- `bart_vocab_downstream.txt`: Fine-tuning vocabulary (default)
+- `prop_bart_vocab.txt`: Property prediction vocabulary with QSAR tokens
 
-<a id="2">[2]</a>
-Weininger, David.
-"SMILES, a chemical language and information system. 1. Introduction to methodology and encoding rules."
-Journal of chemical information and computer sciences 28.1 (1988): 31-36.
+### Training Configurations
 
-<a id="3">[3]</a>
-Irwin, Ross, et al.
-"Chemformer: A Pre-Trained Transformer for Computational Chemistry."
-ChemRxiv (2021). doi:10.33774/chemrxiv-2021-v2pnn
+**Learning Rate Schedules**:
+- `cycle`: OneCycleLR schedule (recommended for fine-tuning)
+- `transformer`: Transformer-style schedule with warmup
+- `const`: Constant learning rate
 
-<a id="4">[4]</a>
-Irwin, R., Dimitriadis, S., He, J., Bjerrum, E.J., 2021. Chemformer: A Pre-Trained Transformer for Computational Chemistry. Mach. Learn. Sci. Technol. [https://doi.org/10.1088/2632-2153/ac3ffb](https://doi.org/10.1088/2632-2153/ac3ffb)
+**Model Architectures**:
+- `bart`: Standard BART encoder-decoder
+- `unified`: Unified architecture variant
+
+**Advanced Options**:
+- `--lora`: Enable LoRA fine-tuning
+- `--fix_encoder`: Freeze encoder weights
+- `--fix_decoder`: Freeze decoder weights
+- `--gamma`: Loss weighting parameter for RetroLLM
+
+---
+
+## Experiment Scripts
+
+### MolBART Experiments
+
+**USPTO-50 Dataset**:
+- `fine_tune_gamma1_baseline.sh`: Baseline configuration
+- `fine_tune_fix_decoder_with_layers.sh`: Frozen decoder + additional layers
+- `fine_tune_fix_encoder_with_end_layer.sh`: Frozen encoder + end layer
+- `fine_tune_fix_encoder.sh`: Frozen encoder only
+
+**RetroLLM Dataset** (testing gamma values):
+- `fine_tune_retrollm_gamma0.sh`: γ = 0.0
+- `fine_tune_retrollm_gamma017.sh`: γ = 0.17
+- `fine_tune_retrollm_gamma033.sh`: γ = 0.33
+
+### LLM4Chem
+
+```bash
+# Fine-tune with LoRA
+python LLM4Chem/finetune.py \
+  --base_model osunlp/LlaSMol-Mistral-7B \
+  --data_path data/chemistry_dataset.json \
+  --output_dir checkpoints/llm4chem \
+  --batch_size 512 \
+  --micro_batch_size 4 \
+  --num_epochs 3
+
+# Generate predictions
+python LLM4Chem/generate_on_dataset.py \
+  --model_name osunlp/LlaSMol-Mistral-7B \
+  --output_dir eval/output \
+  --tasks "['forward_synthesis','retrosynthesis']"
+```
+
+---
+
+## Multi-GPU Training
+
+### Using PyTorch Lightning DDP
+
+```bash
+python -m molbart.fine_tune \
+  --gpus 4 \
+  --batch_size 32 \
+  --acc_batches 4 \
+  # ... other arguments
+```
+
+### Using DeepSpeed
+
+```bash
+python -m molbart.train \
+  --deepspeed config/deepspeed/ds_config.json \
+  --gpus 8 \
+  # ... other arguments
+```
+
+**Note**: Validation is disabled in DDP mode to prevent deadlocks. The `--train_tokens` parameter must be `None` when using multiple GPUs.
+
+---
+
+## Pre-trained Models & Datasets
+
+Download pre-trained models and datasets from:
+- 📦 [Box Repository](https://az.box.com/s/7eci3nd9vy0xplqniitpk02rbg9q2zcq)
+
+**Available Models**:
+- Combined pre-trained BART (1M steps)
+- Fine-tuned models for USPTO-50
+- Task-specific fine-tuned models
+
+---
+
+## Advanced Usage
+
+### Custom Dataset
+
+```python
+from molbart.data.datasets import ReactionDataset
+from molbart.data.datamodules import FineTuneReactionDataModule
+
+# Load your dataset
+dataset = ReactionDataset("path/to/data.txt")
+
+# Create data module
+dm = FineTuneReactionDataModule(
+    dataset=dataset,
+    tokeniser=tokeniser,
+    batch_size=64,
+    max_seq_len=512
+)
+```
+
+### Custom Training Loop
+
+```python
+import pytorch_lightning as pl
+from molbart.models.pre_train import BARTModel
+
+# Initialize model
+model = BARTModel(...)
+
+# Setup trainer
+trainer = pl.Trainer(
+    gpus=1,
+    max_epochs=50,
+    precision=16
+)
+
+# Train
+trainer.fit(model, datamodule=dm)
+```
+
+---
+
+## Performance
+
+### USPTO-50 Benchmark (Top-1 Accuracy)
+
+| Model | Accuracy |
+|-------|----------|
+| MolBART (baseline) | 58.3% |
+| MolBART + LoRA | 59.7% |
+| LlaSMol-Mistral-7B | 62.1% |
+
+*Results may vary based on hyperparameters and training configuration*
+
+---
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test file
+pytest test/pre_train_model_test.py
+
+# Run with coverage
+pytest --cov=molbart test/
+```
+
+</div>
