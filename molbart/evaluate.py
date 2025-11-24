@@ -12,7 +12,7 @@ DEFAULT_AUG_PROB = 0.0
 DEFAULT_TRAIN_TOKENS = None
 DEFAULT_NUM_BUCKETS = None
 DEFAULT_NUM_BEAMS = 10
-DEFAULT_VOCAB_PATH = "bart_vocab_downstream.txt"
+DEFAULT_VOCAB_PATH = "config/vocabs/bart_vocab_downstream.txt"
 
 
 def build_trainer(args, limit_test_batches=1.0):

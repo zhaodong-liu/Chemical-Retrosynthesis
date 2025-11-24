@@ -28,9 +28,9 @@ DEFAULT_MAX_SEQ_LEN = 512
 DEFAULT_DROPOUT = 0.1
 DEFAULT_GAMMA = 0
 
-DEFAULT_DEEPSPEED_CONFIG_PATH = "ds_config.json"
+DEFAULT_DEEPSPEED_CONFIG_PATH = "config/deepspeed/ds_config.json"
 DEFAULT_LOG_DIR = "tb_logs"
-DEFAULT_VOCAB_PATH = "bart_vocab.txt"
+DEFAULT_VOCAB_PATH = "config/vocabs/bart_vocab.txt"
 DEFAULT_CHEM_TOKEN_START = 272
 REGEX = "\[[^\]]+]|Br?|Cl?|N|O|S|P|F|I|b|c|n|o|s|p|\(|\)|\.|=|#|-|\+|\\\\|\/|:|~|@|\?|>|\*|\$|\%[0-9]{2}|[0-9]"
 
