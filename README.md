@@ -153,8 +153,7 @@ Chemical-Retrosynthesis/
 │   └── evaluate.py            # Evaluation script
 ├── LLM4Chem/                    # LLM4Chem submodule
 ├── dataset_conversion/          # Dataset format converters
-├── test/                        # Unit tests
-└── CLAUDE.md                    # Development guidelines
+└── test/                        # Unit tests
 ```
 
 ---
